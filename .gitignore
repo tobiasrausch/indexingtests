@@ -1,3 +1,7 @@
+.sdsl
+src/index
+src/sdslLite
+
 # Compiled Object files
 *.slo
 *.lo
