@@ -1,6 +1,9 @@
 .sdsl
+.boost
+.htslib
 src/index
 src/sdslLite
+src/indexfq
 
 # Compiled Object files
 *.slo

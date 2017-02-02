@@ -5,16 +5,17 @@ STATIC ?= 0
 PWD = $(shell pwd)
 SDSL_ROOT ?= ${PWD}/src/sdslLite
 SEQTK_ROOT ?= ${PWD}/src/htslib/
+BOOST_ROOT ?= ${PWD}/src/modular-boost
 
 # Flags
 CXX=g++
-CXXFLAGS += -std=c++11 -O3 -DNDEBUG -I ${SEQTK_ROOT} -I ${SDSL_ROOT}/include -pedantic -W -Wall
-LDFLAGS += -L ${SDSL_ROOT}/lib -lsdsl -ldivsufsort -ldivsufsort64 -L ${SEQTK_ROOT}
+CXXFLAGS += -std=c++11 -O3 -DNDEBUG -isystem ${SEQTK_ROOT} -isystem ${BOOST_ROOT} -I ${SDSL_ROOT}/include -pedantic -W -Wall
+LDFLAGS += -L${SDSL_ROOT}/lib -L${BOOST_ROOT}/stage/lib -lboost_iostreams -lboost_filesystem -lboost_system -lboost_program_options -lboost_date_time -lsdsl -ldivsufsort -ldivsufsort64 -L${SEQTK_ROOT}
 
 ifeq (${STATIC}, 1)
 	LDFLAGS += -static -static-libgcc -pthread -lhts -lz
 else
-	LDFLAGS += -lhts -lz -Wl,-rpath,${SEQTK_ROOT}
+	LDFLAGS += -lhts -lz -Wl,-rpath,${SEQTK_ROOT},-rpath,${BOOST_ROOT}/stage/lib
 endif
 
 ifeq (${DEBUG}, 1)
@@ -29,19 +30,32 @@ endif
 # External sources
 SDSLSOURCES = $(wildcard src/sdsl/lib/*.cpp)
 IDXSOURCES = $(wildcard src/*.cpp) $(wildcard src/*.h)
+HTSLIBSOURCES = $(wildcard src/htslib/*.c) $(wildcard src/htslib/*.h)
+BOOSTSOURCES = $(wildcard src/modular-boost/libs/iostreams/include/boost/iostreams/*.hpp)
 PBASE=$(shell pwd)
 
 # Targets
-TARGETS = .sdsl src/index
+TARGETS = .sdsl .htslib .boost src/index src/indexfq
 
 all:   	$(TARGETS)
 
 .sdsl: $(SDSLSOURCES)
 	cd src/sdsl/ && ./install.sh ${PBASE}/src/sdslLite && cd ../../ && touch .sdsl
 
-src/index: .sdsl ${IDXSOURCES}
+.htslib: $(HTSLIBSOURCES)
+	cd src/htslib && make && make lib-static && cd ../../ && touch .htslib
+
+.boost: $(BOOSTSOURCES)
+	cd src/modular-boost && ./bootstrap.sh --prefix=${PWD}/src/modular-boost --without-icu --with-libraries=iostreams,filesystem,system,program_options,date_time && ./b2 && ./b2 headers && cd ../../ && touch .boost
+
+src/indexfq: .sdsl .htslib .boost ${IDXSOURCES}
+	$(CXX) $(CXXFLAGS) $@.cpp -o $@ $(LDFLAGS)
+
+src/index: .sdsl .htslib .boost ${IDXSOURCES}
 	$(CXX) $(CXXFLAGS) $@.cpp -o $@ $(LDFLAGS)
 
 clean:
+	cd src/htslib && make clean
+	cd src/modular-boost && ./b2 --clean-all
 	cd src/sdsl/ && ./uninstall.sh && cd ../../ && rm -rf src/sdslLite/
 	rm -f $(TARGETS) $(TARGETS:=.o)
